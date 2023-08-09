@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<meta name="apple-itunes-app" content="app-id=1542186974" />
+		<meta name="viewport"
+			content="width=device-width, initial-scale=1, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<meta http-equiv="Expires" content="0">
+		<meta http-equiv="Pragma" content="no-cache">
+		<meta http-equiv="Cache-control" content="no-cache">
+		<meta http-equiv="Cache" content="no-cache">
+		<title></title>
+		<!-- OSS -->
+		<script type="text/javascript" src="./js/aliyun-oss-sdk-6.17.1.min.js"></script>
+		<!-- OSS -->
+		
+		<!-- Import Vue 3 -->
+		<script src="./js/vue.global.js"></script>
+		
+		<script src="./js/axios.min.js"></script>
+		<script src="./js/data.js"></script>
+		<script src="./js/md5.js"></script>
+		<script src="./js/spark-md5.js"></script>
+
+		<!-- element UI -->
+		<link rel="stylesheet" href="./css/element.css" />
+		<script src="./js/element.js"></script>
+		<script src="./js/icons-vue"></script>
+		<!-- element UI -->
+		
+		<link rel="stylesheet" href="./css/css.css">
+
+		<style>
+			.el-upload-dragger {
+				width: 500px;
+				height: 200px;
+			}
+
+			.el-dialog__header {
+				padding: 10px;
+			}
+
+			.el-dialog__body {
+				padding: 10px;
+
+			}
+
+			.el-dialog__footer {
+				padding: 10px;
+
+			}
+		</style>
+	</head>
+	<body>
+		<div id="app" class="app">
+
+			<el-dialog v-model="dialogVisible" title="提示" width="380px" :close-on-click-modal="false" :show-close="false">
+				<div style="display: flex;justify-content: center; font-size: 14px; color: #606266;">
+					<div
+						style="width: 200px;padding-top: 10px;box-sizing: border-box; text-align: right;padding-right: 10px;">
+						想要压缩到的文件大小 </div>
+					<div style="width: 80px;">
+						<el-input type="number" v-model="size" placeholder="请输入内容"></el-input>
+					</div>
+					<div style="padding-top: 10px;box-sizing: border-box; padding-left: 10px;">MB</div>
+				
+				</div>
+				<div style="display: flex;justify-content: center; font-size: 14px; color: #ff0000; padding-top: 10px;">
+					（范围在 1MB ~ 1000MB 之间）
+				</div>
+				<template #footer>
+					<span class="dialog-footer">
+						<el-button @click="cancelFun">取 消</el-button>
+						<el-button v-if="dialogVisible" type="primary" @click.once="yesFun">确 定</el-button>
+					</span>
+				</template>
+			</el-dialog>
+
+			<div style="width: 500px; text-align: center;">
+				<el-upload class="upload-demo" action="#" accept=".pdf" :show-file-list="false" drag
+					:on-change="onPdfChange" :auto-upload="false">
+					<el-icon class="el-icon--upload" style="color: #C0C4CC;"><upload-filled /></el-icon>
+					<div class="el-upload__text">将文件拖到此处，或<span class="co">点击上传</span></div>
+					<div class="el-upload__tip">只能上传pdf文件，且不超过2G</div>
+				</el-upload>
+
+				<div style="width: 500px; padding-top: 0px;">
+
+					<updatadiv v-for="(item,index) in updataArr" :zindex="index" :zitem="item"
+						@dele-item-fun="deleItemFun"></updatadiv>
+
+				</div>
+
+			</div>
+
+		</div>
+	</body>
+</html>
+
+
+<script src="./template/updatadiv.js"></script>
+<script>
+	const App = {
+		data() {
+			return {
+
+				userId: "",
+				//loading的定时器
+				setTimeoutTime: null,
+
+				//加载文件的loading
+				loading: null,
+
+				// 上传的多个文件数据数组
+				updataArr: [],
+
+				// 输入压综大小的弹窗
+				dialogVisible: false,
+
+				//想要压缩到的文件大小 MB
+				size: 50,
+
+				// 文件的hash
+				namemd5: "",
+
+				// 上传的文件
+				file: null,
+			};
+		},
+		mounted() {
+		
+			this.userId = getUserId()
+			this.init()
+
+		},
+		methods: {
+			init() {
+			},
+
+
+			//上传文件
+			onPdfChange(file, fileList) {
+
+
+				let filesize = file.size / 1024 / 1024;
+				if (filesize > 2000) { // 2G
+					this.$message.error("上传文件不能超过2G");
+					return;
+				}
+				this.file = file
+
+				//加载动画
+				this.openFullScreen2()
+
+				//计算hash码
+				getPdfMD5(file.raw, (md5) => {
+
+					// 关闭加载动画
+					this.loading.close();
+
+					// 取消定时器
+					if (this.setTimeoutTime != null) {
+						clearTimeout(this.setTimeoutTime)
+						this.setTimeoutTime = null
+					}
+
+					//获取到 hash
+					this.namemd5 = md5
+
+					//提示压缩目标值
+					this.dialogVisible = true
+				})
+			},
+
+			//加载动画
+			openFullScreen2() {
+
+				this.loading = this.$loading({
+					lock: true,
+					text: '拼命加载中...',
+					background: 'rgba(0, 0, 0, 0.7)'
+				});
+
+				// 万一卡住，定时关闭
+				if (this.setTimeoutTime == null) {
+					this.setTimeoutTime = setTimeout(() => {
+						this.loading.close();
+					}, 1000 * 100);
+				}
+
+			},
+			//取消上传
+			cancelFun() {
+				this.dialogVisible = false
+			},
+
+			//确认上传
+			yesFun() {
+
+				if (isNaN(this.size)) {
+					this.$message.error('你输入的不是数字')
+					return
+				}
+
+				if (this.size < 1 || this.size > 1000) {
+					this.$message.error('你输入数字不在 ( 1~1000 ) 范围内')
+					return
+				}
+
+				let obj = {}
+				obj.nameMd5 = this.namemd5
+				obj.file = this.file
+				obj.size = this.size
+				obj.userId = this.userId
+				let ost = this.file.size / 1024 / 1024
+				this.osize = Number(ost).toFixed(2)
+
+				if (ost < this.size) {
+					this.$message.error('pdf文件大小 小于期望压缩的' + this.size + "MB 无需压缩")
+				} else {
+					this.updataArr.push(obj)
+				}
+				this.dialogVisible = false
+			},
+
+			//删除对应数组数据
+			deleItemFun(index) {
+				this.updataArr.splice(index, 1);
+			}
+		}
+
+	};
+	const app = Vue.createApp(App);
+	// 添加Element
+	app.use(ElementPlus);
+	// 添加 Element的 图标
+	for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
+		app.component(key, component)
+	}
+
+
+
+	app.component('updatadiv', updatabody())
+
+
+	app.mount("#app");
+</script>
+
+
+
+<script>
+	// console.log(this)
+	// const {
+	// 	createApp,
+	// 	watch,
+	// 	reactive,
+	// 	ref,
+	// 	onBeforeMount,
+	// 	onMounted,
+	// 	// onBeforeUpdate,
+	// 	// onUpdated,
+	// 	// onBeforeUnmount,
+	// 	// onUnmounted
+	// } = Vue
+	// createApp({
+	// 	setup() {
+
+	// 		let dialogVisible = ref(false)
+	// 		const mydiv = ref(null); // 创建一个 ref
+
+	// 		let data = reactive({
+	// 			message:'aaabbccdd',
+	// 			obj:{
+	// 				name:"sglksjdf",
+	// 				age:10
+	// 			}
+	// 		}) 
+
+	// 		function showMessage() {
+	// 			data.message = "引入的html文件";
+	// 			data.obj.name="ooooo"
+	// 			data.obj.age=557
+
+	// 		}
+	// 		function cancelFun(){
+
+	// 		}
+	// 		function yesFun(){
+
+	// 		}
+	// 		// 其他的生命周期
+	// 		onBeforeMount(() => {
+	// 			console.log("App ===> 相当于 vue2.x 中 beforeMount")
+	// 		})
+	// 		onMounted(() => {
+
+	// 			console.log(mydiv.value); // 打印当前 div 元素的引用
+	// 			console.log("App ===> 相当于 vue2.x 中 mounted")
+	// 		})
+	// 		// // 更新前
+	// 		// onBeforeUpdate(() => {
+	// 		// 	console.log("App ===> 相当于 vue2.x 中 beforeUpdate")
+	// 		// })
+	// 		// // 更新中
+	// 		// onUpdated(() => {
+	// 		// 	console.log("App ===> 相当于 vue2.x 中 updated")
+	// 		// })
+	// 		// // 卸载前
+	// 		// onBeforeUnmount(() => {
+	// 		// 	console.log("App ===> 相当于 vue2.x 中 beforeDestroy")
+	// 		// })
+	// 		// // 卸载中
+	// 		// onUnmounted(() => {
+	// 		// 	console.log("App ===> 相当于 vue2.x 中 destroyed")
+	// 		// })
+
+	// 		// watch(data.message, (newValue, oldValue) => {
+	// 		//   console.log('值发生了变更', newValue, oldValue);
+	// 		// })
+	// 		return {
+	// 			dialogVisible,
+	// 			mydiv, // 返回 ref
+	// 			data,
+	// 			showMessage,
+	// 			cancelFun,
+	// 			yesFun
+	// 		}
+
+	// 	}
+	// }).mount('#app')
+</script>
